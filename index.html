@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Juego de Memoria — Parejas de Cartas</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ENCABEZADO CON MARCADOR (HUD) -->
+  <header class="hud">
+    <h1>🎴 Juego de Memoria</h1>
+
+    <div class="marcador" role="status" aria-live="polite">
+      <div class="dato">
+        <span class="valor" id="intentos">0</span>
+        <span class="etiqueta">Intentos</span>
+      </div>
+      <div class="dato">
+        <span class="valor" id="tiempo">0:00</span>
+        <span class="etiqueta">Tiempo</span>
+      </div>
+      <div class="dato">
+        <span class="valor" id="parejas">0/8</span>
+        <span class="etiqueta">Parejas</span>
+      </div>
+    </div>
+
+    <div class="controles">
+      <div class="niveles" role="group" aria-label="Nivel de dificultad">
+        <button id="btn-facil" class="nivel activo" type="button">4×4</button>
+        <button id="btn-dificil" class="nivel" type="button">6×6</button>
+      </div>
+      <button id="btn-tema" type="button" aria-label="Cambiar tema">🌙</button>
+      <button id="btn-reiniciar" type="button">🔄 Reiniciar</button>
+    </div>
+  </header>
+
+  <!-- TABLERO 4x4 -->
+  <main>
+    <section class="tablero" id="tablero" aria-label="Tablero de cartas">
+      <!-- Las 16 tarjetas las genera JavaScript -->
+    </section>
+  </main>
+
+  <!-- MENSAJE DE VICTORIA -->
+  <div class="victoria" id="victoria" hidden>
+    <div class="victoria-caja">
+      <h2>🎉 ¡Ganaste!</h2>
+      <p id="resumen"></p>
+      <button id="btn-jugar-otra" type="button">Jugar otra vez</button>
+    </div>
+  </div>
+
+  <footer>
+    <p>Reto SENA · HTML + CSS + JavaScript vanilla</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

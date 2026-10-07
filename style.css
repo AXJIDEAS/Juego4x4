@@ -1,0 +1,192 @@
+/* ============ 1. VARIABLES Y TEMA OSCURO (por defecto) ============ */
+:root {
+  --fondo: #0f1226;
+  --fondo2: #1b2150;
+  --panel: #1a1f3d;
+  --acento1: #7c3aed;   /* violeta */
+  --acento2: #22d3ee;   /* cian    */
+  --acierto: #22c55e;
+  --error: #ef4444;
+  --texto: #e5e7eb;
+  --sombra: rgba(0, 0, 0, .35);
+  --radio: 14px;
+}
+
+/* ============ 1b. TEMA CLARO ============ */
+[data-tema="claro"] {
+  --fondo: #eef1fb;
+  --fondo2: #dbe4ff;
+  --panel: #ffffff;
+  --acento1: #6d28d9;
+  --acento2: #0e7490;
+  --texto: #1f2937;
+  --sombra: rgba(31, 41, 55, .18);
+}
+
+/* ============ 2. BASE ============ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(circle at top, var(--fondo2), var(--fondo));
+  color: var(--texto);
+  font-family: system-ui, -apple-system, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 1.2rem;
+}
+
+/* ============ 3. HUD (ENCABEZADO) ============ */
+.hud {
+  width: min(640px, 100%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--panel);
+  padding: 1rem 1.2rem;
+  border-radius: var(--radio);
+  box-shadow: 0 8px 30px var(--sombra);
+}
+
+.hud h1 {
+  font-size: clamp(1.1rem, 4vw, 1.6rem);
+  background: linear-gradient(90deg, var(--acento1), var(--acento2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.marcador { display: flex; gap: 1.2rem; }
+
+.dato { display: flex; flex-direction: column; align-items: center; }
+.dato .valor    { font-size: 1.25rem; font-weight: 700; }
+.dato .etiqueta { font-size: .7rem; opacity: .7; text-transform: uppercase; }
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: .6rem 1.2rem;
+  font-weight: 600;
+  font-size: .95rem;
+  color: #fff;
+  background: linear-gradient(90deg, var(--acento1), var(--acento2));
+  cursor: pointer;
+  transition: transform .15s, filter .15s;
+}
+button:hover  { filter: brightness(1.15); transform: translateY(-2px); }
+button:active { transform: translateY(0); }
+
+/* Controles: niveles de dificultad + tema */
+.controles { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+
+.niveles {
+  display: flex;
+  background: rgba(124, 58, 237, .15);
+  border-radius: 999px;
+  padding: .2rem;
+}
+.nivel {
+  background: transparent;
+  padding: .4rem .8rem;
+  font-size: .85rem;
+  opacity: .65;
+}
+.nivel.activo {
+  background: linear-gradient(90deg, var(--acento1), var(--acento2));
+  opacity: 1;
+}
+.nivel:hover { transform: none; filter: none; }
+
+/* ============ 4. TABLERO (CSS GRID) ============ */
+.tablero {
+  width: min(640px, 100%);
+  display: grid;
+  grid-template-columns: repeat(var(--columnas, 4), 1fr);  /* 4x4 o 6x6 */
+  gap: clamp(.4rem, 2vw, .8rem);
+}
+
+/* ============ 5. TARJETA ============ */
+.tarjeta {
+  aspect-ratio: 1;                    /* cuadrada siempre */
+  border: 0;
+  border-radius: var(--radio);
+  font-size: clamp(1.4rem, 6vw, 2.4rem);
+  cursor: pointer;
+  position: relative;
+  background: linear-gradient(135deg, var(--acento1), var(--acento2));
+  color: transparent;                  /* oculta el emoji */
+  transition: transform .3s, background .3s, box-shadow .3s;
+}
+
+/* Estado: boca arriba (volteada) */
+.tarjeta.volteada {
+  background: var(--panel);
+  color: inherit;
+  transform: rotateY(180deg);
+  box-shadow: 0 0 18px rgba(34, 211, 238, .45);
+}
+
+/* Estado: ya es pareja */
+.tarjeta.pareada {
+  background: rgba(34, 197, 94, .2);
+  color: var(--acierto);
+  transform: rotateY(180deg) scale(.95);
+  box-shadow: 0 0 20px rgba(34, 197, 94, .5);
+  cursor: default;
+}
+
+/* Estado: error (se da la vuelta sola) */
+@keyframes error {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-6px); }
+  75%      { transform: translateX(6px); }
+}
+.tarjeta.error { animation: error .3s; }
+
+/* ============ 6. VICTORIA ============ */
+.victoria {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .75);
+  display: grid;
+  place-items: center;
+}
+.victoria[hidden] { display: none; }
+
+.victoria-caja {
+  background: var(--panel);
+  padding: 2rem 2.5rem;
+  border-radius: var(--radio);
+  text-align: center;
+  box-shadow: 0 0 40px rgba(124, 58, 237, .6);
+}
+.victoria-caja h2 { font-size: 2rem; margin-bottom: .6rem; }
+.victoria-caja p  { margin-bottom: 1.2rem; opacity: .85; }
+
+/* ============ 6b. CONFETI ============ */
+@keyframes caer {
+  to { transform: translateY(110vh) rotate(720deg); opacity: .85; }
+}
+.confeti {
+  position: fixed;
+  top: -16px;
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 99;
+  animation: caer linear forwards;
+}
+
+footer { opacity: .55; font-size: .8rem; }
+
+/* ============ 7. RESPONSIVE ============ */
+@media (max-width: 480px) {
+  .hud { justify-content: center; text-align: center; }
+  .marcador { gap: .8rem; }
+  .controles { justify-content: center; }
+}

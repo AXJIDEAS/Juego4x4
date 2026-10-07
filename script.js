@@ -1,174 +1,237 @@
-(function() {
-  // ----- CONFIGURACIÓN -----
-  const TOTAL_PAIRS = 8;                 // 8 pares -> 16 cartas
-  const EMOJIS = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼']; // 8 emojis únicos
+/* =========================================================
+   JUEGO DE MEMORIA — lógica completa
+   Estados: boca abajo → volteada → pareja / error
+   ========================================================= */
 
-  // ----- ESTADO DEL JUEGO -----
-  let cards = [];                 // array de objetos { id, emoji, matched }
-  let flippedIndices = [];       // índices de cartas volteadas actualmente (máximo 2)
-  let matchedPairs = 0;
-  let moves = 0;
-  let lockBoard = false;         // bloquea clics mientras se comparan cartas
+// ---------- 1. DATOS DEL JUEGO ----------
+const EMOJIS = ["🐶", "🐱", "🦊", "🐼", "🦁", "🐸", "🐵", "🦄", "🐮", "🐷", "🐔", "🐧", "🦜", "🐠", "🦀", "🦋", "🐙", "🦉"];
+const TIEMPO_ESPERA = 700; // ms que quedan visibles dos cartas
 
-  // ----- ELEMENTOS DEL DOM -----
-  const boardEl = document.getElementById('board');
-  const moveCountEl = document.getElementById('moveCount');
-  const pairCountEl = document.getElementById('pairCount');
-  const winMessageEl = document.getElementById('winMessage');
-  const restartBtn = document.getElementById('restartButton');
+// Niveles de dificultad: cuántos pares y cuántas columnas usa el tablero
+const NIVELES = {
+  facil:   { columnas: 4, parejas: 8 },
+  dificil: { columnas: 6, parejas: 18 }
+};
+let nivelActual = "facil";
 
-  // ----- INICIALIZAR / REINICIAR JUEGO -----
-  function initGame() {
-    // Reiniciar estado
-    flippedIndices = [];
-    matchedPairs = 0;
-    moves = 0;
-    lockBoard = false;
-    updateStats();
-    winMessageEl.classList.add('hidden');
+// ---------- 2. ESTADO ----------
+let cartas = [];          // arreglo con las cartas barajadas
+let primeraCarta = null;  // referencia a la 1ª carta volteada
+let segundaCarta = null;  // referencia a la 2ª carta volteada
+let bloqueo = false;      // evita girar 3 cartas seguidas
+let intentos = 0;
+let parejas = 0;
 
-    // Crear mazo: duplicar emojis y barajar
-    const deck = [...EMOJIS, ...EMOJIS]; // 16 cartas
-    shuffleArray(deck);
+// temporizador
+let segundos = 0;
+let intervalo = null;
+let tiempoIniciado = false;
 
-    // Crear objetos de carta
-    cards = deck.map((emoji, index) => ({
-      id: index,
-      emoji: emoji,
-      matched: false,
-    }));
+// ---------- 3. ELEMENTOS DEL DOM ----------
+const tablero      = document.getElementById("tablero");
+const btnReiniciar = document.getElementById("btn-reiniciar");
+const victoria     = document.getElementById("victoria");
+const btnOtra      = document.getElementById("btn-jugar-otra");
+const etiIntentos  = document.getElementById("intentos");
+const etiTiempos   = document.getElementById("tiempo");
+const etiParejas   = document.getElementById("parejas");
+const resumen      = document.getElementById("resumen");
+const btnFacil     = document.getElementById("btn-facil");
+const btnDificil   = document.getElementById("btn-dificil");
+const btnTema      = document.getElementById("btn-tema");
 
-    // Renderizar tablero
-    renderBoard();
+// Devuelve la cantidad de parejas del nivel actual
+function totalParejas() {
+  return NIVELES[nivelActual].parejas;
+}
+
+// ---------- 4. FUNCIONES AUXILIARES ----------
+
+// Barajado aleatorio (algoritmo de Fisher-Yates)
+function barajar(arreglo) {
+  for (let i = arreglo.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arreglo[i], arreglo[j]] = [arreglo[j], arreglo[i]];
   }
+  return arreglo;
+}
 
-  // Barajar (Fisher-Yates)
-  function shuffleArray(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  }
+// Formatea segundos a "m:ss"
+function formatoTiempo(total) {
+  const min = Math.floor(total / 60);
+  const seg = String(total % 60).padStart(2, "0");
+  return `${min}:${seg}`;
+}
 
-  // Renderizar todas las cartas en el tablero
-  function renderBoard() {
-    boardEl.innerHTML = '';
-    cards.forEach((card, index) => {
-      const cardEl = document.createElement('div');
-      cardEl.className = `card ${card.matched ? 'matched' : ''}`;
-      cardEl.dataset.index = index;
+// Actualiza el marcador en pantalla
+function actualizarMarcador() {
+  etiIntentos.textContent = intentos;
+  etiParejas.textContent  = `${parejas}/${totalParejas()}`;
+  etiTiempos.textContent   = formatoTiempo(segundos);
+}
 
-      // Estructura interna para el efecto 3D
-      const innerEl = document.createElement('div');
-      innerEl.className = 'card-inner';
+// ---------- 5. TEMPORIZADOR ----------
+function iniciarTiempo() {
+  if (tiempoIniciado) return;          // solo arranca una vez
+  tiempoIniciado = true;
+  intervalo = setInterval(() => {
+    segundos++;
+    etiTiempos.textContent = formatoTiempo(segundos);
+  }, 1000);
+}
 
-      const backEl = document.createElement('div');
-      backEl.className = 'card-back';
+function detenerTiempo() {
+  clearInterval(intervalo);
+}
 
-      const frontEl = document.createElement('div');
-      frontEl.className = 'card-front';
-      frontEl.textContent = card.emoji;
+// ---------- 6. RENDER DEL TABLERO ----------
+function pintarTablero() {
+  tablero.innerHTML = "";                          // limpia el tablero
+  tablero.style.setProperty("--columnas", NIVELES[nivelActual].columnas);
 
-      innerEl.appendChild(backEl);
-      innerEl.appendChild(frontEl);
-      cardEl.appendChild(innerEl);
-
-      // Si la carta ya está emparejada, la mostramos volteada (matched)
-      if (card.matched) {
-        cardEl.classList.add('flipped', 'matched');
-      }
-
-      // Evento click
-      cardEl.addEventListener('click', () => onCardClick(index));
-
-      boardEl.appendChild(cardEl);
-    });
-  }
-
-  // ----- MANEJAR CLIC EN CARTA -----
-  function onCardClick(index) {
-    // Bloqueos: tablero bloqueado, carta ya emparejada o ya volteada
-    if (lockBoard) return;
-    if (cards[index].matched) return;
-    if (flippedIndices.includes(index)) return;
-    if (flippedIndices.length >= 2) return;
-
-    // Voltear la carta visualmente
-    const cardEl = boardEl.children[index];
-    cardEl.classList.add('flipped');
-
-    // Añadir a la lista de volteadas
-    flippedIndices.push(index);
-
-    // Si hay 2 cartas volteadas, comparar
-    if (flippedIndices.length === 2) {
-      // Incrementar movimientos
-      moves++;
-      updateStats();
-      // Bloquear tablero mientras se procesa
-      lockBoard = true;
-      checkMatch();
-    }
-  }
-
-  // Comprobar si las dos cartas volteadas coinciden
-  function checkMatch() {
-    const [idxA, idxB] = flippedIndices;
-    const cardA = cards[idxA];
-    const cardB = cards[idxB];
-
-    if (cardA.emoji === cardB.emoji) {
-      // Coincidencia: marcar como emparejadas
-      cardA.matched = true;
-      cardB.matched = true;
-      matchedPairs++;
-
-      // Actualizar clases CSS
-      const elA = boardEl.children[idxA];
-      const elB = boardEl.children[idxB];
-      elA.classList.add('matched');
-      elB.classList.add('matched');
-
-      // Actualizar estadísticas
-      updateStats();
-
-      // Limpiar el estado de volteadas
-      flippedIndices = [];
-      lockBoard = false;
-
-      // Verificar si el juego terminó
-      if (matchedPairs === TOTAL_PAIRS) {
-        winMessageEl.classList.remove('hidden');
-      }
-    } else {
-      // No coinciden: esperar un momento y voltearlas de nuevo
-      setTimeout(() => {
-        const elA = boardEl.children[idxA];
-        const elB = boardEl.children[idxB];
-        // Asegurarse de que no se han emparejado mientras tanto
-        if (!cards[idxA].matched) elA.classList.remove('flipped');
-        if (!cards[idxB].matched) elB.classList.remove('flipped');
-
-        // Limpiar estado
-        flippedIndices = [];
-        lockBoard = false;
-      }, 700);
-    }
-  }
-
-  // Actualizar contadores en pantalla
-  function updateStats() {
-    moveCountEl.textContent = moves;
-    pairCountEl.textContent = matchedPairs;
-  }
-
-  // ----- REINICIAR -----
-  restartBtn.addEventListener('click', () => {
-    initGame();
+  cartas.forEach((emoji, indice) => {
+    const tarjeta = document.createElement("button");
+    tarjeta.type = "button";
+    tarjeta.classList.add("tarjeta");
+    tarjeta.textContent = emoji;
+    tarjeta.dataset.indice = indice;   // identificador del DOM
+    tarjeta.setAttribute("aria-label", "Carta boca abajo");
+    tarjeta.addEventListener("click", () => voltear(tarjeta));
+    tablero.appendChild(tarjeta);
   });
+}
 
-  // ----- INICIO -----
-  initGame();
+// ---------- 7. VOLTEAR Y VERIFICAR ----------
+function voltear(tarjeta) {
+  // Reglas de bloqueo: no girar si...
+  if (bloqueo) return;                                  // hay animación en curso
+  if (tarjeta === primeraCarta) return;                 // es la misma carta
+  if (tarjeta.classList.contains("volteada")) return;   // ya está girada
 
-})();
+  tarjeta.classList.add("volteada");
+  tarjeta.setAttribute("aria-label", tarjeta.textContent);
+
+  if (!primeraCarta) {
+    primeraCarta = tarjeta;         // es la primera carta de la jugada
+    iniciarTiempo();                // el tiempo arranca aquí
+    return;
+  }
+
+  segundaCarta = tarjeta;
+  intentos++;
+  actualizarMarcador();
+
+  verificar();
+}
+
+function verificar() {
+  const esPareja = primeraCarta.textContent === segundaCarta.textContent;
+
+  if (esPareja) {
+    // Se queda el "glow" verde y ya no se puede volver a tocar
+    primeraCarta.classList.add("pareada");
+    segundaCarta.classList.add("pareada");
+    primeraCarta.setAttribute("aria-label", "Pareja de " + primeraCarta.textContent);
+    segundaCarta.setAttribute("aria-label", "Pareja de " + segundaCarta.textContent);
+
+    parejas++;
+    reiniciarJugada();
+    actualizarMarcador();
+
+    if (parejas === totalParejas()) victoriaFinal();    // mensaje de victoria
+
+  } else {
+    bloqueo = true;                        // bloquea mientras se ven las 2 cartas
+    const cartaA = primeraCarta;           // se guardan por si reinician el juego
+    const cartaB = segundaCarta;
+    cartaA.classList.add("error");
+    cartaB.classList.add("error");
+
+    setTimeout(() => {
+      if (!cartaA.isConnected) return;     // el tablero ya se repintó
+      // Se dan la vuelta otra vez
+      cartaA.classList.remove("volteada", "error");
+      cartaB.classList.remove("volteada", "error");
+      cartaA.setAttribute("aria-label", "Carta boca abajo");
+      cartaB.setAttribute("aria-label", "Carta boca abajo");
+      reiniciarJugada();
+    }, TIEMPO_ESPERA);
+  }
+}
+
+// Limpia las referencias de la jugada actual
+function reiniciarJugada() {
+  primeraCarta = null;
+  segundaCarta = null;
+  bloqueo = false;
+}
+
+// ---------- 8. VICTORIA + CONFETI ----------
+function crearConfeti() {
+  const colores = ["#7c3aed", "#22d3ee", "#22c55e", "#f59e0b", "#ef4444", "#ec4899"];
+
+  for (let i = 0; i < 60; i++) {
+    const pieza = document.createElement("div");
+    pieza.classList.add("confeti");
+    pieza.style.left = Math.random() * 100 + "vw";
+    pieza.style.background = colores[i % colores.length];
+    pieza.style.animationDuration = (2.5 + Math.random() * 2) + "s"; // 2.5s a 4.5s
+    pieza.addEventListener("animationend", () => pieza.remove());    // se borra sola
+    document.body.appendChild(pieza);
+  }
+}
+
+function victoriaFinal() {
+  detenerTiempo();
+  resumen.textContent = `Completaste las ${totalParejas()} parejas con ${intentos} intentos en ${formatoTiempo(segundos)}.`;
+  victoria.hidden = false;
+  crearConfeti();
+}
+
+// ---------- 9. REINICIAR CON BARAJADO ALEATORIO ----------
+function reiniciar() {
+  detenerTiempo();
+
+  // Resetea todo el estado: toma los pares del nivel y los baraja
+  cartas = barajar([...EMOJIS.slice(0, totalParejas()), ...EMOJIS.slice(0, totalParejas())]);
+  primeraCarta = null;
+  segundaCarta = null;
+  bloqueo = false;
+  intentos = 0;
+  parejas = 0;
+  segundos = 0;
+  tiempoIniciado = false;
+
+  victoria.hidden = true;
+  actualizarMarcador();
+  pintarTablero();
+}
+
+// ---------- 10. EVENTOS ----------
+btnReiniciar.addEventListener("click", reiniciar);
+btnOtra.addEventListener("click", reiniciar);
+
+// Cambiar nivel de dificultad (reinicia la partida)
+function elegirNivel(nivel) {
+  nivelActual = nivel;
+  btnFacil.classList.toggle("activo", nivel === "facil");
+  btnDificil.classList.toggle("activo", nivel === "dificil");
+  reiniciar();
+}
+btnFacil.addEventListener("click", () => elegirNivel("facil"));
+btnDificil.addEventListener("click", () => elegirNivel("dificil"));
+
+// Tema claro / oscuro (se recuerda con localStorage)
+function aplicarTema(tema) {
+  document.documentElement.dataset.tema = tema;
+  btnTema.textContent = tema === "claro" ? "☀️" : "🌙";
+  localStorage.setItem("tema", tema);
+}
+btnTema.addEventListener("click", () => {
+  const actual = document.documentElement.dataset.tema || "oscuro";
+  aplicarTema(actual === "oscuro" ? "claro" : "oscuro");
+});
+
+// ---------- 11. INICIO ----------
+aplicarTema(localStorage.getItem("tema") || "oscuro");
+reiniciar();
